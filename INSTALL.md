@@ -46,6 +46,7 @@
 | 工具 | 目录 | 类型 | 说明 |
 |------|------|------|------|
 | auto-review | auto-review/ | plugin + agent | 操作安全性自动审核 |
+| session-rename | session-rename/ | plugin + command | `/session-rename` 命令，根据对话上下文重命名 session |
 
 ---
 
