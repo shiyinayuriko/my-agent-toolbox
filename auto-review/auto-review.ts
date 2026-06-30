@@ -43,10 +43,11 @@ async function securityReview(
   op: string,
   directory: string,
   worktree: string,
+  parentSessionID: string,
 ): Promise<{ safe: boolean; reason: string }> {
   const hasGit = worktree && worktree !== "/"
   const context = `工作目录: ${directory}\nGit 仓库路径: ${hasGit ? worktree : "无"}`
-  const r = await client.session.create({ body: { title: "Security Review" } })
+  const r = await client.session.create({ body: { title: "Security Review", parentID: parentSessionID } })
   const sid = r.data?.id
   if (!sid) throw new Error("failed to create review session")
 
@@ -99,7 +100,7 @@ export const server: Plugin = async ({ client, directory, worktree }) => {
       const op = patterns.join(" | ")
 
       try {
-        const review = await securityReview(client, p.permission, op, directory, worktree)
+        const review = await securityReview(client, p.permission, op, directory, worktree, p.sessionID)
 
         if (review.safe) {
           await client.postSessionIdPermissionsPermissionId({

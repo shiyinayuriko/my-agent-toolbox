@@ -1,6 +1,6 @@
 ---
 name: auto-review
-version: 0.1.0
+version: 0.1.1
 type: plugin + agent
 platform: opencode
 scope: [global, project]
@@ -31,7 +31,7 @@ scope: [global, project]
 
 ```
 auto-review.ts (plugin)
-    ↓ 创建子会话，调用 agent
+    ↓ 传入 parentID=p.sessionID，创建子会话，调用 agent
 agents/security-review.md (subagent)
     ↓ 返回 JSON
 auto-review.ts
@@ -39,6 +39,7 @@ auto-review.ts
 ```
 
 - `auto-review.ts` 监听 `permission.asked` 事件，构造 prompt 发给 security-review agent
+- 审核 session 通过 `parentID` 挂载为当前 session 的子 session，会显示在 session 层级中
 - `security-review.md` 接收操作描述 + 上下文，按规则判定安全性，返回 `{safe, reason}` JSON
 - plugin 解析 agent 返回的 JSON，safe=true 则调用 API 自动放行
 

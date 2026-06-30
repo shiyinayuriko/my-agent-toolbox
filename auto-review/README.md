@@ -1,6 +1,6 @@
 # Auto Review
 
-> 版本：0.1.0
+> 版本：0.1.1
 
 自动审核操作安全性。监听 opencode 的 `permission.asked` 事件，将操作描述发给 security-review agent 判定是否安全，安全操作自动放行，危险操作交由用户确认。
 
