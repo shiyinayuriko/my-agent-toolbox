@@ -1,6 +1,6 @@
 ---
 name: auto-review
-version: 0.1.0
+version: 0.1.1
 type: plugin + agent
 platform: opencode
 scope: [global, project]
@@ -31,16 +31,23 @@ scope: [global, project]
 
 ```
 auto-review.ts (plugin)
-    ↓ 创建子会话，调用 agent
+    ↓ event hook → 创建独立子 session，调用 agent
 agents/security-review.md (subagent)
     ↓ 返回 JSON
 auto-review.ts
-    ↓ 解析结果，决定放行或交用户确认
+    ↓ record() → 日志 + toast 聚合通知 + 决定放行/交用户确认
 ```
 
-- `auto-review.ts` 监听 `permission.asked` 事件，构造 prompt 发给 security-review agent
+- `auto-review.ts` 监听 `permission.asked` 事件，创建独立子 session 调用 security-review agent
+- 审核结果通过 `record()` 统一处理：写入调试日志 + 聚合进 toast 批量显示
+- toast 聚合机制：每个结果到达时立即显示累积的完整记录（`----` 分隔），`TOAST_MS` 窗口内无新结果后清空缓存
+- `client.tui.showToast` 仅在 TUI 生效，web UI 中静默忽略
 - `security-review.md` 接收操作描述 + 上下文，按规则判定安全性，返回 `{safe, reason}` JSON
 - plugin 解析 agent 返回的 JSON，safe=true 则调用 API 自动放行
+
+### 版本号更新时机
+
+版本号仅在 commit 时更新，开发调试过程中不重复 bump。每次 commit 前确认 frontmatter version 已同步到最终值。
 
 ### 修改联动
 
@@ -56,6 +63,7 @@ auto-review.ts
 - agent 使用 xiaomi/mimo-v2.5，推理能力有限，复杂场景可能误判
 - 如果 agent 返回非 JSON 或空响应，plugin 默认不放行（安全降级）
 - diag 函数用于诊断 agent 空响应的原因，日志在 `.opencode/permission-debug.log`
+- toast 通知仅在 TUI 中生效，web UI 无等效面板 API
 
 ### 验证方式
 

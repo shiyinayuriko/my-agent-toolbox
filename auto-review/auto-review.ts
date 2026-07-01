@@ -87,6 +87,28 @@ export const server: Plugin = async ({ client, directory, worktree }) => {
   log("── Plugin started " + new Date().toLocaleString("zh-CN") + " ──")
   log(`[INFO] worktree="${worktree}" directory="${directory}"`)
 
+  let batch: { safe: boolean; line: string }[] = []
+  let timer: any = null
+  const TOAST_MS = 8000
+
+  function record(label: string, permission: string, op: string, reason: string, safe: boolean) {
+    const line = `${label.toUpperCase().padEnd(5)} | ${permission} | ${op} | ${reason}`
+    log(line)
+    batch.push({ safe, line })
+    const variant = batch.every(r => r.safe) ? "success" : "warning"
+    // Web/Headless 客户端会忽略该事件；即使未连接 TUI，服务端也会正常接收。
+    client.tui.showToast({
+      body: {
+        title: "Security Review",
+        message: batch.map(r => r.line).join("\n----\n"),
+        variant,
+        duration: TOAST_MS,
+      },
+    }).catch(() => {})
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(() => { batch = []; timer = null }, TOAST_MS)
+  }
+
   return {
     event: async ({ event }: any) => {
       if (event.type !== "permission.asked") return
@@ -106,9 +128,9 @@ export const server: Plugin = async ({ client, directory, worktree }) => {
             path: { id: p.sessionID, permissionID: p.id },
             body: { response: "once" },
           })
-          log(`ALLOW | ${p.permission} | ${op} | ${review.reason}`)
+          record("allow", p.permission, op, review.reason, true)
         } else {
-          log(`ASK   | ${p.permission} | ${op} | ${review.reason}`)
+          record("ask", p.permission, op, review.reason, false)
         }
       } catch (err: any) {
         log(`ERROR | ${p.permission} | ${op} | ${err.message}`)
