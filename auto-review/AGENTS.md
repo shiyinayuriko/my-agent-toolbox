@@ -31,16 +31,19 @@ scope: [global, project]
 
 ```
 auto-review.ts (plugin)
-    ↓ event hook → 创建独立子 session，调用 agent
+    ↓ event hook → 检查项目实例内存缓存，未命中则创建独立子 session
 agents/security-review.md (subagent)
     ↓ 返回 JSON
 auto-review.ts
-    ↓ record() → 日志 + toast 聚合通知 + 决定放行/交用户确认
+    ↓ 缓存合法结果 → record() → 日志 + toast 聚合通知 + 决定放行/交用户确认
 ```
 
 - `auto-review.ts` 监听 `permission.asked` 事件，创建独立子 session 调用 security-review agent
+- 每个 plugin 项目实例维护独立内存缓存，key 由 permission、patterns、metadata 精确组成
+- 合法审核结果固定缓存 10 分钟，命中不续期；空响应、非法 JSON 和异常不缓存
 - 审核结果通过 `record()` 统一处理：写入调试日志 + 聚合进 toast 批量显示
-- toast 聚合机制：每个结果到达时立即显示累积的完整记录（`----` 分隔），`TOAST_MS` 窗口内无新结果后清空缓存
+- 审核异常通过 `ERROR` record 写入日志并显示 warning toast
+- toast 聚合机制：每个结果到达时立即显示累积的完整记录（`----` 分隔），`TOAST_MS` 窗口内无新结果后清空批量缓冲
 - `client.tui.showToast` 仅在 TUI 生效，web UI 中静默忽略
 - `security-review.md` 接收操作描述 + 上下文，按规则判定安全性，返回 `{safe, reason}` JSON
 - plugin 解析 agent 返回的 JSON，safe=true 则调用 API 自动放行
@@ -64,6 +67,7 @@ auto-review.ts
 - 如果 agent 返回非 JSON 或空响应，plugin 默认不放行（安全降级）
 - diag 函数用于诊断 agent 空响应的原因，日志在 `.opencode/permission-debug.log`
 - toast 通知仅在 TUI 中生效，web UI 无等效面板 API
+- 审核缓存仅存在于当前 plugin 实例内存中，opencode 重启后清空
 
 ### 验证方式
 

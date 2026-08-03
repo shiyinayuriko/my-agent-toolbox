@@ -3,6 +3,10 @@ import { appendFileSync, mkdirSync, existsSync } from "fs"
 import { join, dirname } from "path"
 
 let LOG_FILE = ""
+const CACHE_TTL_MS = 10 * 60 * 1000
+
+type Review = { safe: boolean; reason: string; completed: boolean }
+type CacheEntry = Review & { expiresAt: number }
 
 function ensureLogDir(file: string) {
   const dir = dirname(file)
@@ -13,6 +17,26 @@ function ensureLogDir(file: string) {
 
 function log(msg: string) {
   appendFileSync(LOG_FILE, `[${new Date().toISOString()}] ${msg}\n`)
+}
+
+function getCachedReview(cache: Map<string, CacheEntry>, key: string): Review | undefined {
+  const cached = cache.get(key)
+  if (!cached) return
+  if (cached.expiresAt > Date.now()) return cached
+  cache.delete(key)
+}
+
+function cacheReview(cache: Map<string, CacheEntry>, key: string, review: Review) {
+  if (!review.completed) return
+  cache.set(key, { ...review, expiresAt: Date.now() + CACHE_TTL_MS })
+}
+
+async function replyIfSafe(client: any, permission: any, safe: boolean) {
+  if (!safe) return
+  await client.postSessionIdPermissionsPermissionId({
+    path: { id: permission.sessionID, permissionID: permission.id },
+    body: { response: "once" },
+  })
 }
 
 function diag(parts: any[], info: any): string[] {
@@ -43,7 +67,7 @@ async function securityReview(
   op: string,
   directory: string,
   worktree: string,
-): Promise<{ safe: boolean; reason: string }> {
+): Promise<Review> {
   const hasGit = worktree && worktree !== "/"
   const context = `工作目录: ${directory}\nGit 仓库路径: ${hasGit ? worktree : "无"}`
   const r = await client.session.create({ body: { title: "Security Review" } })
@@ -69,13 +93,16 @@ async function securityReview(
     if (!text) {
       const flags = diag(parts, info)
       if (flags.length) log(`DIAG | ${permission} | ${op} | ${flags.join("; ")}`)
-      return { safe: false, reason: "no response" }
+      return { safe: false, reason: "no response", completed: false }
     }
 
     const jsonMatch = text.match(/\{[\s\S]*\}/)?.[0]
-    if (!jsonMatch) return { safe: false, reason: "invalid JSON" }
+    if (!jsonMatch) return { safe: false, reason: "invalid JSON", completed: false }
 
-    return JSON.parse(jsonMatch)
+    const review = JSON.parse(jsonMatch)
+    if (typeof review.safe !== "boolean" || typeof review.reason !== "string")
+      return { safe: false, reason: "invalid JSON", completed: false }
+    return { safe: review.safe, reason: review.reason, completed: true }
   } finally {
     await client.session.delete({ path: { id: sid } }).catch(() => {})
   }
@@ -87,6 +114,7 @@ export const server: Plugin = async ({ client, directory, worktree }) => {
   log("── Plugin started " + new Date().toLocaleString("zh-CN") + " ──")
   log(`[INFO] worktree="${worktree}" directory="${directory}"`)
 
+  const reviewCache = new Map<string, CacheEntry>()
   let batch: { safe: boolean; line: string }[] = []
   let timer: any = null
   const TOAST_MS = 8000
@@ -121,19 +149,20 @@ export const server: Plugin = async ({ client, directory, worktree }) => {
       const op = patterns.join(" | ")
 
       try {
-        const review = await securityReview(client, p.permission, op, directory, worktree)
-
-        if (review.safe) {
-          await client.postSessionIdPermissionsPermissionId({
-            path: { id: p.sessionID, permissionID: p.id },
-            body: { response: "once" },
-          })
-          record("allow", p.permission, op, review.reason, true)
-        } else {
-          record("ask", p.permission, op, review.reason, false)
+        const cacheKey = JSON.stringify([p.permission, patterns, p.metadata ?? null])
+        const cached = getCachedReview(reviewCache, cacheKey)
+        if (cached) {
+          await replyIfSafe(client, p, cached.safe)
+          record(cached.safe ? "allow" : "ask", p.permission, op, `${cached.reason} [cache]`, cached.safe)
+          return
         }
+
+        const review = await securityReview(client, p.permission, op, directory, worktree)
+        await replyIfSafe(client, p, review.safe)
+        cacheReview(reviewCache, cacheKey, review)
+        record(review.safe ? "allow" : "ask", p.permission, op, review.reason, review.safe)
       } catch (err: any) {
-        log(`ERROR | ${p.permission} | ${op} | ${err.message}`)
+        record("error", p.permission, op, err.message, false)
       }
     },
   }
