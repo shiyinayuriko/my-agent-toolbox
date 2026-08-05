@@ -1,6 +1,6 @@
 ---
 name: auto-review
-version: 0.2.0
+version: 0.3.0
 type: plugin + agent
 platform: opencode
 scope: [global, project]
@@ -13,7 +13,7 @@ scope: [global, project]
 
 ## 安装指令
 
-1. 确认前置条件：用户已配置 xiaomi/mimo-v2.5 provider
+1. 确认前置条件：用户已配置 deepseek/deepseek-v4-flash provider
 2. 询问用户安装范围（全局 / 项目级），用户可取消
 3. 执行文件安装：
    - 全局：
@@ -46,7 +46,7 @@ auto-review.ts
 - 审核异常通过 `ERROR` record 写入日志并显示 warning toast
 - toast 聚合机制：每个结果到达时立即显示累积的完整记录（`----` 分隔），`TOAST_MS` 窗口内无新结果后清空批量缓冲
 - `client.tui.showToast` 仅在 TUI 生效，web UI 中静默忽略
-- `security-review.md` 接收操作描述 + 上下文，按规则判定安全性，返回 `{safe, reason}` JSON
+- `security-review.md` 接收操作描述 + 上下文，必要时通过受限 `git rev-parse` 检测同仓 linked worktree 或工作目录内 Git 子项目，返回 `{safe, reason}` JSON
 - plugin 解析 agent 返回的 JSON，safe=true 则调用 API 自动放行
 
 ### 版本号更新时机
@@ -64,7 +64,7 @@ auto-review.ts
 
 ### 已知限制
 
-- agent 使用 xiaomi/mimo-v2.5，推理能力有限，复杂场景可能误判
+- agent 使用 deepseek/deepseek-v4-flash，复杂场景仍可能误判
 - 如果 agent 返回非 JSON 或空响应，plugin 默认不放行（安全降级）
 - diag 函数用于诊断 agent 空响应的原因，日志在 `.opencode/permission-debug.log`
 - toast 通知仅在 TUI 中生效，web UI 无等效面板 API
