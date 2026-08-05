@@ -38,7 +38,8 @@ auto-review.ts
     ↓ 缓存合法结果 → record() → 日志 + toast 聚合通知 + 决定放行/交用户确认
 ```
 
-- `auto-review.ts` 监听 `permission.asked` 事件，创建独立子 session 调用 security-review agent
+- `auto-review.ts` 监听 `permission.asked` 事件，先查缓存，再执行 `localReview()` 本地策略，未命中则创建独立子 session 调用 agent
+- `localReview()` 是本地策略入口，危险规则写前面、安全规则写后面、返回 null 交给 agent；策略结果同样缓存 10 分钟，命中日志追加 `[local]`
 - 每个 plugin 项目实例维护独立内存缓存，key 由 permission、patterns、metadata 精确组成
 - 合法审核结果固定缓存 10 分钟，命中不续期；空响应、非法 JSON 和异常不缓存
 - 审核结果通过 `record()` 统一处理：写入调试日志 + 聚合进 toast 批量显示

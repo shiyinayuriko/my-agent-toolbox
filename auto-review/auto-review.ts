@@ -39,6 +39,18 @@ async function replyIfSafe(client: any, permission: any, safe: boolean) {
   })
 }
 
+function localReview(
+  permission: string,
+  patterns: string[],
+  directory: string,
+  worktree: string,
+): Review | null {
+  // 危险规则写前面（返回 { safe: false, reason, completed: true }）
+  // 安全规则写后面（返回 { safe: true, reason, completed: true }）
+  // 判断不了返回 null，交给 agent
+  return null
+}
+
 function diag(parts: any[], info: any): string[] {
   const flags: string[] = []
   if (info?.error) {
@@ -154,6 +166,14 @@ export const server: Plugin = async ({ client, directory, worktree }) => {
         if (cached) {
           await replyIfSafe(client, p, cached.safe)
           record(cached.safe ? "allow" : "ask", p.permission, op, `${cached.reason} [cache]`, cached.safe)
+          return
+        }
+
+        const local = localReview(p.permission, patterns, directory, worktree)
+        if (local) {
+          await replyIfSafe(client, p, local.safe)
+          cacheReview(reviewCache, cacheKey, local)
+          record(local.safe ? "allow" : "ask", p.permission, op, `${local.reason} [local]`, local.safe)
           return
         }
 
