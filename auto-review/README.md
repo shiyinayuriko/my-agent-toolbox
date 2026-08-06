@@ -1,6 +1,6 @@
 # Auto Review
 
-> 版本：0.3.0
+> 版本：0.3.1
 
 自动审核操作安全性。监听 opencode 的 `permission.asked` 事件，将操作描述发给 security-review agent 判定是否安全，安全操作自动放行，危险操作交由用户确认。
 
@@ -20,6 +20,10 @@
 ## 使用说明
 
 安装后自动生效，无需额外配置。所有需要权限的操作都会经过安全审核。
+
+## OpenViking 兼容性
+
+如果同时安装了 OpenViking 插件，security-review agent 的 session 会被注入 `<openviking-context>` 合成消息（记忆召回），可能导致 agent 被注入内容误导而误判。需要为 OpenViking 插件打 2 行补丁隔离 security-review session，详细步骤见 [AGENTS.md](./AGENTS.md) 的「OpenViking 插件补丁」章节。
 
 ## 项目级定制
 

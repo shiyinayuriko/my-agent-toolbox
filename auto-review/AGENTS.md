@@ -1,6 +1,6 @@
 ---
 name: auto-review
-version: 0.3.0
+version: 0.3.1
 type: plugin + agent
 platform: opencode
 scope: [global, project]
@@ -60,6 +60,7 @@ auto-review.ts
 | agent 的判定规则 | plugin 的 prompt 构造是否提供了对应上下文 |
 | plugin 的 prompt 格式 | agent 的解析逻辑是否匹配 |
 | plugin 的 diag 逻辑 | 仅诊断用，不影响 agent |
+| OpenViking 插件升级 | 重新打补丁（见"OpenViking 插件补丁"） |
 | 任何功能变更 | **必须执行版本更新链路（见全局 AGENTS.md "版本管理"）** |
 
 ### 已知限制
@@ -69,6 +70,47 @@ auto-review.ts
 - diag 函数用于诊断 agent 空响应的原因，日志在 `.opencode/permission-debug.log`
 - toast 通知仅在 TUI 中生效，web UI 无等效面板 API
 - 审核缓存仅存在于当前 plugin 实例内存中，opencode 重启后清空
+- OpenViking 插件补丁会在插件升级时丢失，需重新打（见"OpenViking 插件补丁"）
+
+### OpenViking 插件补丁
+
+security-review agent 的 session 会被 OpenViking 插件注入 `<openviking-context>` 合成消息（记忆召回），可能导致 agent 被注入内容误导（如历史"预批准临时目录"记忆导致误放行）。需要对 OpenViking 插件打 2 行补丁，使 security-review session 跳过注入和捕获。
+
+**前置条件**：
+- OpenViking 插件已通过 `opencode.jsonc` 的 `plugin` 数组注册
+- 插件的 `config` 钩子会自动注册 MCP server，`opencode.jsonc` 中**不需要**手动配置 `"openviking"` MCP 条目
+- `~/.openviking/opencode-mcp-proxy/` 残留目录已删除（插件自动管理 MCP proxy 路径）
+- 凭证在 `~/.openviking/ovcli.conf`，不受补丁影响
+
+**补丁文件**：`~/.cache/opencode/packages/@openviking/opencode-plugin@latest/node_modules/@openviking/opencode-plugin/index.mjs`
+
+**补丁内容**（2 行，基于 0.2.4 版本）：
+
+1. `event` 钩子开头加 1 行（`event: async ({ event }) => {` 之后）：
+   ```javascript
+   if (event?.properties?.info?.agent === "security-review") return
+   ```
+   作用：跳过 security-review session 的事件处理，阻止消息捕获上传到 OpenViking
+
+2. `chat.message` 钩子开头加 1 行（`"chat.message": async (input, output) => {` 之后、`try {` 之前）：
+   ```javascript
+   if (output.message?.agent === "security-review") return
+   ```
+   作用：跳过 security-review session 的记忆注入和 session-start 上下文注入
+
+**验证补丁存在**：
+```bash
+grep -c "security-review" ~/.cache/opencode/packages/@openviking/opencode-plugin@latest/node_modules/@openviking/opencode-plugin/index.mjs
+```
+应返回 `2`
+
+**升级后重放**：
+1. `cd ~/.cache/opencode/packages/@openviking/opencode-plugin@latest && npm install @openviking/opencode-plugin@latest`
+2. 确认 `package.json` 版本已更新
+3. 按上述补丁内容重新添加 2 行
+4. `node --check index.mjs` 确认语法
+5. 重启 opencode
+6. 触发一次 security-review，导出 session 确认无 `<openviking-context>`
 
 ### 验证方式
 

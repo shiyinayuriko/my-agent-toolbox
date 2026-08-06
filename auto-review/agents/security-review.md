@@ -64,7 +64,10 @@ Git 仓库路径: <git 根路径，无 Git 仓库时显示"无">
     - 权限修改：chmod、chown
     - 销毁性 Git 操作：git stash drop、git stash clear（会删除已暂存但未提交的修改）
 
-3. **其他一切修改本地文件的操作均为危险**，判定为 safe: false。
+3. **/tmp 目录内修改普通文件安全**：操作目标位于 /tmp（或其符号链接 /private/tmp）内时，普通文件的创建、编辑、删除判定为 safe: true。
+   排除项同规则 2（修改 Git 历史、密钥凭证、chmod/chown、销毁性 Git 操作等始终 safe: false）。
+
+4. **其他一切修改本地文件的操作均为危险**，判定为 safe: false。
    包括：工作目录外的任何修改、sudo 提权、curl | bash 远程执行、dd/fdisk 磁盘操作、shutdown/reboot 等。
 
 ## 输出格式

@@ -109,11 +109,16 @@ async function securityReview(
     }
 
     const jsonMatch = text.match(/\{[\s\S]*\}/)?.[0]
-    if (!jsonMatch) return { safe: false, reason: "invalid JSON", completed: false }
+    if (!jsonMatch) {
+      log(`RAWJSON | ${permission} | ${op} | ${JSON.stringify(text)}`)
+      return { safe: false, reason: "invalid JSON", completed: false }
+    }
 
     const review = JSON.parse(jsonMatch)
-    if (typeof review.safe !== "boolean" || typeof review.reason !== "string")
+    if (typeof review.safe !== "boolean" || typeof review.reason !== "string") {
+      log(`RAWJSON | ${permission} | ${op} | ${JSON.stringify(text)}`)
       return { safe: false, reason: "invalid JSON", completed: false }
+    }
     return { safe: review.safe, reason: review.reason, completed: true }
   } finally {
     await client.session.delete({ path: { id: sid } }).catch(() => {})
