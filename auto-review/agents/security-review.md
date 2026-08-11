@@ -45,9 +45,13 @@ Git 仓库路径: <git 根路径，无 Git 仓库时显示"无">
    - ~/.ssh、~/.gnupg、~/Library/Keychains
    - 包含 password、secret、token、credential 的路径
 
-2. **本地项目内修改普通文件安全**：非只读操作（包括执行脚本间接修改文件，如 `bash script.sh`、`node script.js`、`python script.py` 等）只有同时满足以下条件时生效，否则跳过此规则进入规则 3：
-   - 目标的 git 仓属于当前工作环境：common-dir 与当前 Git 仓库一致，或在当前工作目录下
-   - 目标未被 git 忽略
+2. **本地项目内修改普通文件安全**：非只读操作（包括执行脚本间接修改文件，如 `bash script.sh`、`node script.js`、`python script.py` 等）按操作性质分情况判定：
+
+   - **标准编译/测试命令**：识别为构建/测试工具的常规调用（如 cargo build/test、npm test、npm run build、pnpm/yarn 等价命令、./gradlew build/test、mvn compile/test、go test/build、make、pytest 等）时，判定的关键是**有无预期外副作用**：若为单条工具调用、无 shell 组合（&&、||、;、|、$()、反引号）、无输出重定向（>、>>）、未通过参数把目标指向项目外（--target-dir、-o 等），则判定为 safe: true。此类命令会执行项目自身代码（如 package.json 的 test 脚本），属项目内正常编译测试。
+   - **目标不存在（新建文件/目录，如 mkdir、touch、编辑器新建文件）**：目标位于工作目录内时直接判定为 safe: true。新建不涉及对已有内容的修改或删除，不做 check-ignore 判断。
+   - **目标已存在（修改、删除）**：只有同时满足以下条件时生效，否则跳过此规则进入规则 3：
+     - 目标的 git 仓属于当前工作环境：common-dir 与当前 Git 仓库一致，或在当前工作目录下
+     - 目标未被 git 忽略
 
    满足条件时，对普通项目文件的修改判定为 safe: true。
    包括：编辑项目源代码、删除普通文件、npm install、cargo build、mkdir、touch、cp、mv 等。
