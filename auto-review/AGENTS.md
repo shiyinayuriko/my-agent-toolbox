@@ -1,6 +1,6 @@
 ---
 name: auto-review
-version: 0.3.3
+version: 0.3.4
 type: plugin + agent
 platform: opencode
 scope: [global, project]
