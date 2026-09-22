@@ -1,9 +1,11 @@
 import type { Plugin } from "@opencode-ai/plugin"
+import { spawnSync } from "child_process"
 import { appendFileSync, mkdirSync, existsSync } from "fs"
 import { join, dirname } from "path"
 
 let LOG_FILE = ""
 const CACHE_TTL_MS = 10 * 60 * 1000
+const commonDirCache = new Map<string, string | null>()
 
 type Review = { safe: boolean; reason: string; completed: boolean }
 type CacheEntry = Review & { expiresAt: number }
@@ -39,15 +41,54 @@ async function replyIfSafe(client: any, permission: any, safe: boolean) {
   })
 }
 
+function getCurrentCommonDir(worktree: string): string | null {
+  if (commonDirCache.has(worktree)) return commonDirCache.get(worktree)!
+  let result: string | null = null
+  if (worktree && worktree !== "/") {
+    const r = spawnSync("git", ["-C", worktree, "rev-parse", "--path-format=absolute", "--git-common-dir"], {
+      timeout: 3000,
+      encoding: "utf8",
+    })
+    if (!r.error && r.status === 0 && r.stdout.trim()) {
+      result = r.stdout.trim()
+    }
+  }
+  commonDirCache.set(worktree, result)
+  return result
+}
+
+function targetCommonDir(dir: string): string | null {
+  const r = spawnSync("git", ["-C", dir, "rev-parse", "--path-format=absolute", "--show-toplevel", "--git-common-dir"], {
+    timeout: 3000,
+    encoding: "utf8",
+  })
+  if (r.error || r.status !== 0) return null
+  const lines = r.stdout.trim().split("\n").filter(Boolean)
+  if (lines.length !== 2) return null
+  return lines[1]
+}
+
 function localReview(
   permission: string,
   patterns: string[],
   directory: string,
   worktree: string,
+  metadata: any,
 ): Review | null {
   // 危险规则写前面（返回 { safe: false, reason, completed: true }）
   // 安全规则写后面（返回 { safe: true, reason, completed: true }）
   // 判断不了返回 null，交给 agent
+  if (permission === "external_directory") {
+    const dirs: string[] = Array.isArray(metadata?.directories) ? metadata.directories : []
+    if (!dirs.length) return null
+    const currentCommonDir = getCurrentCommonDir(worktree)
+    if (currentCommonDir === null) return null
+    for (const dir of dirs) {
+      if (typeof dir !== "string" || !dir) return null
+      if (targetCommonDir(dir) !== currentCommonDir) return null
+    }
+    return { safe: true, reason: "same commonDir (linked worktree)", completed: true }
+  }
   return null
 }
 
@@ -174,7 +215,7 @@ export const server: Plugin = async ({ client, directory, worktree }) => {
           return
         }
 
-        const local = localReview(p.permission, patterns, directory, worktree)
+        const local = localReview(p.permission, patterns, directory, worktree, p.metadata)
         if (local) {
           await replyIfSafe(client, p, local.safe)
           cacheReview(reviewCache, cacheKey, local)

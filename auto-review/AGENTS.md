@@ -1,6 +1,6 @@
 ---
 name: auto-review
-version: 0.3.4
+version: 0.4.0
 type: plugin + agent
 platform: opencode
 scope: [global, project]
@@ -40,6 +40,7 @@ auto-review.ts
 
 - `auto-review.ts` 监听 `permission.asked` 事件，先查缓存，再执行 `localReview()` 本地策略，未命中则创建独立子 session 调用 agent
 - `localReview()` 是本地策略入口，危险规则写前面、安全规则写后面、返回 null 交给 agent；策略结果同样缓存 10 分钟，命中日志追加 `[local]`
+- `localReview()` 对 `external_directory` 且 `metadata.directories` 存在时逐目录执行 `git rev-parse --path-format=absolute --show-toplevel --git-common-dir`，全部目录 commonDir 与当前仓库 commonDir 一致才确定性放行（同仓 linked worktree）；检测失败、非 git、不同仓一律返回 null 交给 agent（fail-closed），当前仓库 commonDir 按 worktree 惰性计算并缓存
 - 每个 plugin 项目实例维护独立内存缓存，key 由 permission、patterns、metadata 精确组成
 - 合法审核结果固定缓存 10 分钟，命中不续期；空响应、非法 JSON 和异常不缓存
 - 审核结果通过 `record()` 统一处理：写入调试日志 + 聚合进 toast 批量显示
